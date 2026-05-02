@@ -466,6 +466,11 @@ def _parse_metrodoku(content: str) -> tuple[pd.DataFrame, int, int]:
     df = _apply_cheater_rules(df)
     df["score"] = df["score"].astype(int)
     df["date"] = df["timestamp"].dt.date
+    df = (
+        df.sort_values("timestamp")
+        .drop_duplicates(subset=["author", "date"], keep="first")
+        .reset_index(drop=True)
+    )
     return df, all_messages_count, metrodoku_messages_count
 
 
