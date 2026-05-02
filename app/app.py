@@ -21,7 +21,7 @@ PERIODS = {
     "Tout": None,
 }
 CHEATER_SCORE_THRESHOLD = 900
-CHEATER_SCORE_DIVISOR = 10
+CHEATER_SCORE_LAST_DIGITS_MOD = 100
 
 
 def _extract_sort_key_from_title(path: Path) -> tuple[int, int, int] | None:
@@ -438,8 +438,8 @@ def _apply_cheater_rules(df: pd.DataFrame) -> pd.DataFrame:
 
     cheater_mask = working_df["author"].isin(cheaters)
     penalized_scores = (
-        working_df.loc[cheater_mask, "score"] / CHEATER_SCORE_DIVISOR
-    ).round()
+        working_df.loc[cheater_mask, "score"] % CHEATER_SCORE_LAST_DIGITS_MOD
+    )
     working_df.loc[cheater_mask, "score"] = penalized_scores.astype(int)
     working_df["author"] = working_df["author"].map(
         lambda name: f"💩 {name} LE TRICHEUR 💩" if name in cheaters else name
