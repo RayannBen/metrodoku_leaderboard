@@ -1,17 +1,18 @@
-from src.message import Message, MetrodokuMessage, MessageFactory
+from src.message import Message
 from datetime import datetime
-from tests.fixtures import fixture_message, fixture_text, fixture_metrodoku_text
+from tests.fixtures import fixture_message, fixture_text
+
 
 def test_message_creation():
     content = "Hello, World!"
     author = "Alice"
-    timestamp = datetime.now()  
+    timestamp = datetime.now()
 
     message = Message(content, author, timestamp)
 
     assert message.content == content
     assert message.author == author
-    assert message.timestamp is not None  
+    assert message.timestamp is not None
 
 
 def test_fixture_message():
@@ -21,7 +22,7 @@ def test_fixture_message():
 
 
 def test_message_from_txt(txt=fixture_text):
-    
+
     message = Message.from_txt(txt)
 
     assert message.content == txt
