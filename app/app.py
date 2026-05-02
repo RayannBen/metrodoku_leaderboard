@@ -189,6 +189,12 @@ def _apply_custom_ui() -> None:
                 border-radius: 999px;
             }
 
+            div[data-testid="stMain"] div[data-testid="stRadio"] label,
+            div[data-testid="stMain"] div[data-testid="stRadio"] label p,
+            div[data-testid="stMain"] div[data-testid="stRadio"] label span {
+                color: #1b2130 !important;
+            }
+
             .table-card {
                 background: var(--surface);
                 border: 1px solid var(--border);
