@@ -5,6 +5,16 @@ from pathlib import Path
 
 
 class Extract:
+    _OLD_HEADER_PATTERN = re.compile(
+        r"^[\u200e\ufeff]?\d{2}/\d{2}/\d{4}, \d{2}:\d{2} - .+: .+"
+    )
+    _NEW_HEADER_PATTERN = re.compile(
+        r"^[\u200e\ufeff]?\[\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}\] .+: .+"
+    )
+    _NEW_HEADER_NORMALIZE_PATTERN = re.compile(
+        r"^[\u200e\ufeff]?\[(\d{2}/\d{2}/\d{4}) (\d{2}):(\d{2}):\d{2}\] (.+?): (.*)$"
+    )
+
     def __init__(self, content: str):
         self.content = content
         self.messages = self._extract_messages(content)
@@ -22,22 +32,41 @@ class Extract:
         for line in lines:
             if self.is_message_first_line(line):
                 if current_message_lines:
+                    message_txt = self._normalize_message_header(
+                        "\n".join(current_message_lines)
+                    )
                     messages.append(
-                        MessageFactory.create_message("\n".join(current_message_lines))
+                        MessageFactory.create_message(message_txt)
                     )
                     current_message_lines = []
             current_message_lines.append(line)
 
         if current_message_lines:
+            message_txt = self._normalize_message_header("\n".join(current_message_lines))
             messages.append(
-                MessageFactory.create_message("\n".join(current_message_lines))
+                MessageFactory.create_message(message_txt)
             )
 
         return messages
 
     def is_message_first_line(self, line: str) -> bool:
-        pattern = r"^\d{2}/\d{2}/\d{4}, \d{2}:\d{2} - .+: .+"
-        return bool(re.match(pattern, line))
+        return bool(
+            self._OLD_HEADER_PATTERN.match(line)
+            or self._NEW_HEADER_PATTERN.match(line)
+        )
+
+    def _normalize_message_header(self, message_txt: str) -> str:
+        lines = message_txt.splitlines()
+        if not lines:
+            return message_txt
+
+        match = self._NEW_HEADER_NORMALIZE_PATTERN.match(lines[0])
+        if not match:
+            return message_txt
+
+        date_str, hour_str, minute_str, author, body = match.groups()
+        lines[0] = f"{date_str}, {hour_str}:{minute_str} - {author}: {body}"
+        return "\n".join(lines)
 
     def get_all_authors(self) -> set[str]:
         return {message.author for message in self.messages}

@@ -1,5 +1,8 @@
 from src.message import MetrodokuMessage
-from tests.fixtures import fixture_metrodoku_text, fixture_metrodoku_text_with_previous_message
+from tests.fixtures import (
+    fixture_metrodoku_text,
+    fixture_metrodoku_text_with_previous_message,
+)
 
 
 def test_metrodoku_message_creation(txt=fixture_metrodoku_text):

@@ -92,7 +92,8 @@ class MetrodokuMessage(Message):
             "author": self.author,
             "timestamp": self.timestamp.isoformat(),
             "score": self.score,
-            "grid": self._extract_grid(self.content),}
+            "grid": self._extract_grid(self.content),
+        }
 
 
 class MessageFactory:

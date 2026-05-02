@@ -20,7 +20,7 @@ repos:
     hooks:
       - id: format-fix
         name: Formatting (ruff)
-        entry: uv run ruff format src/ tests/
+        entry: uv run ruff format src/ tests/ app/
         pass_filenames: false
         language: system
         types: [python]
@@ -28,7 +28,7 @@ repos:
 
       - id: lint-fix
         name: Linting fix (ruff)
-        entry: uv run ruff check --fix src/ tests/ 
+        entry: uv run ruff check --fix src/ tests/
         pass_filenames: false
         language: system
         types: [python]
