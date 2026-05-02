@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from html import escape
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from src.extract import Extract
 
 
 EXAMPLE_PATH = Path("data/extract_02_05.txt")
+DATA_DIR = Path("data")
 PERIODS = {
     "Semaine (7 jours)": 7,
     "Mois (30 jours)": 30,
@@ -17,6 +19,33 @@ PERIODS = {
     "6 mois (180 jours)": 180,
     "Tout": None,
 }
+
+
+def _extract_sort_key_from_title(path: Path) -> tuple[int, int] | None:
+    match = re.match(r"^extract_(\d{2})_(\d{2})(?:_\d{4})?\.txt$", path.name)
+    if not match:
+        return None
+
+    day, month = int(match.group(1)), int(match.group(2))
+    if day < 1 or day > 31 or month < 1 or month > 12:
+        return None
+    return (month, day)
+
+
+def _get_latest_extract_path() -> Path | None:
+    if not DATA_DIR.exists():
+        return None
+
+    candidates: list[tuple[tuple[int, int], Path]] = []
+    for path in DATA_DIR.glob("extract_*.txt"):
+        key = _extract_sort_key_from_title(path)
+        if key is not None:
+            candidates.append((key, path))
+
+    if not candidates:
+        return EXAMPLE_PATH if EXAMPLE_PATH.exists() else None
+
+    return max(candidates, key=lambda item: item[0])[1]
 
 
 def _apply_custom_ui() -> None:
@@ -451,8 +480,9 @@ def _read_uploaded_or_example(uploaded_file, use_example: bool) -> str | None:
     if uploaded_file is not None:
         return _decode_whatsapp_export(uploaded_file.getvalue())
 
-    if use_example and EXAMPLE_PATH.exists():
-        return EXAMPLE_PATH.read_text(encoding="utf-8")
+    latest_extract_path = _get_latest_extract_path()
+    if use_example and latest_extract_path is not None:
+        return latest_extract_path.read_text(encoding="utf-8")
 
     return None
 
@@ -640,15 +670,20 @@ def main() -> None:
 
         st.divider()
         st.header("Source de donnees")
+        latest_extract_path = _get_latest_extract_path()
         uploaded_file = st.file_uploader(
             "WhatsApp export (.txt)",
             type=["txt"],
             help="Charge le fichier exporte depuis WhatsApp.",
         )
         use_example = st.checkbox(
-            "Utiliser les donnees exemple (data/extract_02_05.txt)",
+            "Utiliser l'extract local le plus recent (data/extract_*.txt)",
             value=uploaded_file is None,
         )
+        if latest_extract_path is not None:
+            st.caption(f"Extract auto-detecte: {latest_extract_path.name}")
+        else:
+            st.caption("Aucun fichier extract_*.txt detecte dans data/.")
 
     content = _read_uploaded_or_example(uploaded_file, use_example)
     _render_hero(page)
