@@ -1,56 +1,23 @@
 from __future__ import annotations
 
-import re
-from html import escape
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-from src.extract import Extract
+from src.metrodoku_service import (
+    DEFAULT_PERIODS,
+    ExtractRepository,
+    MetrodokuAnalyticsService,
+)
+from src.table_renderer import render_pretty_table
 
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = APP_DIR / "data"
 EXAMPLE_PATH = DATA_DIR / "extract_02_05.txt"
-PERIODS = {
-    "Semaine (7 jours)": 7,
-    "Mois (30 jours)": 30,
-    "3 mois (90 jours)": 90,
-    "6 mois (180 jours)": 180,
-    "Tout": None,
-}
-CHEATER_SCORE_THRESHOLD = 900
-CHEATER_SCORE_LAST_DIGITS_MOD = 100
-CHEATER_LABEL = "LE TRICHEUR"
-
-
-def _extract_sort_key_from_title(path: Path) -> tuple[int, int, int] | None:
-    match = re.match(r"^extract_(\d{2})_(\d{2})(?:_(\d{4}))?\.txt$", path.name)
-    if not match:
-        return None
-
-    day, month = int(match.group(1)), int(match.group(2))
-    year = int(match.group(3)) if match.group(3) else 0
-    if day < 1 or day > 31 or month < 1 or month > 12:
-        return None
-    return (year, month, day)
-
-
-def _get_latest_extract_path() -> Path | None:
-    if not DATA_DIR.exists():
-        return None
-
-    candidates: list[tuple[tuple[int, int, int], Path]] = []
-    for path in DATA_DIR.glob("extract_*.txt"):
-        key = _extract_sort_key_from_title(path)
-        if key is not None:
-            candidates.append((key, path))
-
-    if not candidates:
-        return EXAMPLE_PATH if EXAMPLE_PATH.exists() else None
-
-    return max(candidates, key=lambda item: item[0])[1]
+SERVICE = MetrodokuAnalyticsService()
+REPOSITORY = ExtractRepository(DATA_DIR, EXAMPLE_PATH)
 
 
 def _apply_custom_ui() -> None:
@@ -114,14 +81,6 @@ def _apply_custom_ui() -> None:
 
             section[data-testid="stSidebar"] hr {
                 border-color: rgba(255, 255, 255, 0.2);
-            }
-
-            div[data-testid="stDataFrame"] {
-                border: 1px solid var(--border);
-                border-radius: 16px;
-                background: var(--surface);
-                box-shadow: 0 12px 24px rgba(16, 24, 40, 0.06);
-                overflow: hidden;
             }
 
             .hero {
@@ -190,16 +149,6 @@ def _apply_custom_ui() -> None:
 
             .stButton > button {
                 border-radius: 999px;
-            }
-
-            div[data-testid="stMain"] div[data-testid="stRadio"] label,
-            div[data-testid="stMain"] div[data-testid="stRadio"] label p,
-            div[data-testid="stMain"] div[data-testid="stRadio"] label span,
-            div[data-testid="stMain"] div[data-testid="stRadio"] div[data-testid="stMarkdownContainer"],
-            div[data-testid="stMain"] div[data-testid="stRadio"] div[data-testid="stMarkdownContainer"] p,
-            div[data-testid="stMain"] [role="radiogroup"] label,
-            div[data-testid="stMain"] [role="radiogroup"] label * {
-                color: #1b2130 !important;
             }
 
             div[data-testid="stMain"] div[data-testid="stRadio"] {
@@ -340,240 +289,33 @@ def _render_global_metrics(
 
 
 def _section_badge(text: str) -> None:
-    st.markdown(
-        f'<div class="section-title">{text}</div>',
-        unsafe_allow_html=True,
-    )
-
-
-def _format_value(col: str, value: object) -> str:
-    if pd.isna(value):
-        return "-"
-
-    if col == "rank":
-        rank = int(value)
-        medal = ""
-        if rank == 1:
-            medal = " 🥇"
-        elif rank == 2:
-            medal = " 🥈"
-        elif rank == 3:
-            medal = " 🥉"
-        return f'<span class="badge-rank">#{rank}{medal}</span>'
-
-    if col in {"total_points", "best_score", "games", "winning_score", "score"}:
-        return f'<span class="value-strong">{int(value)}</span>'
-
-    if col == "average_score":
-        return f"{float(value):.1f}"
-
-    if col == "timestamp":
-        ts = pd.to_datetime(value, errors="coerce")
-        if pd.isna(ts):
-            return "-"
-        return ts.strftime("%Y-%m-%d %H:%M")
-
-    if col == "date":
-        dt = pd.to_datetime(value, errors="coerce")
-        if pd.isna(dt):
-            return "-"
-        return dt.strftime("%Y-%m-%d")
-
-    return escape(str(value))
-
-
-def _render_pretty_table(df: pd.DataFrame, columns: list[tuple[str, str]]) -> None:
-    if df.empty:
-        st.info("Aucune donnee a afficher.")
-        return
-
-    working_df = df[[col for col, _ in columns]].copy()
-    header_html = "".join(f"<th>{escape(label)}</th>" for _, label in columns)
-
-    body_rows = []
-    for _, row in working_df.iterrows():
-        cells = []
-        for col, _ in columns:
-            cells.append(f"<td>{_format_value(col, row[col])}</td>")
-        body_rows.append("<tr>" + "".join(cells) + "</tr>")
-
-    body_html = "".join(body_rows)
-    st.markdown(
-        f"""
-        <div class="table-card">
-            <div class="table-wrap">
-                <table class="metro-table">
-                    <thead>
-                        <tr>{header_html}</tr>
-                    </thead>
-                    <tbody>
-                        {body_html}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def _decode_whatsapp_export(raw_bytes: bytes) -> str:
-    for encoding in ("utf-8-sig", "utf-8", "latin-1"):
-        try:
-            return raw_bytes.decode(encoding)
-        except UnicodeDecodeError:
-            continue
-    return raw_bytes.decode("utf-8", errors="ignore")
-
-
-def _apply_cheater_rules(df: pd.DataFrame) -> pd.DataFrame:
-    working_df = df.copy()
-    cheaters = set(
-        working_df.loc[
-            working_df["score"] >= CHEATER_SCORE_THRESHOLD,
-            "author",
-        ].tolist()
-    )
-    if not cheaters:
-        return working_df
-
-    cheater_mask = working_df["author"].isin(cheaters)
-    penalized_scores = (
-        working_df.loc[cheater_mask, "score"] % CHEATER_SCORE_LAST_DIGITS_MOD
-    )
-    working_df.loc[cheater_mask, "score"] = penalized_scores.astype(int)
-    working_df["author"] = working_df["author"].map(
-        lambda name: f"💩 {name} {CHEATER_LABEL} 💩" if name in cheaters else name
-    )
-    return working_df
+    st.markdown(f'<div class="section-title">{text}</div>', unsafe_allow_html=True)
 
 
 @st.cache_data(show_spinner=False)
 def _parse_metrodoku(content: str) -> tuple[pd.DataFrame, int, int]:
-    extract = Extract(content)
-    all_messages_count = len(extract.messages)
-    metrodoku_messages_count = len(extract.get_all_metrodoku_messages())
-    df = extract.to_dataframe()
-
-    if df.empty:
-        return df, all_messages_count, metrodoku_messages_count
-
-    df = df.copy()
-    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-    df["score"] = pd.to_numeric(df["score"], errors="coerce")
-    df = df.dropna(subset=["timestamp", "score", "author"])
-    df["score"] = df["score"].astype(int)
-    df = _apply_cheater_rules(df)
-    df["score"] = df["score"].astype(int)
-    df["date"] = df["timestamp"].dt.date
-    df = (
-        df.sort_values("timestamp")
-        .drop_duplicates(subset=["author", "date"], keep="first")
-        .reset_index(drop=True)
-    )
-    return df, all_messages_count, metrodoku_messages_count
-
-
-def _build_global_leaderboard(df: pd.DataFrame) -> pd.DataFrame:
-    leaderboard = (
-        df.groupby("author", as_index=False)
-        .agg(
-            total_points=("score", "sum"),
-            games=("score", "count"),
-            average_score=("score", "mean"),
-            best_score=("score", "max"),
-            median_score=("score", "median"),
-            latest_score=("score", "last"),
-            latest_played_at=("timestamp", "max"),
-        )
-        .sort_values(
-            by=["total_points", "games", "best_score"],
-            ascending=[False, False, False],
-        )
-        .reset_index(drop=True)
-    )
-
-    cheater_mask = leaderboard["author"].str.contains(CHEATER_LABEL, na=False)
-    leaderboard.loc[cheater_mask, "total_points"] = 0
-
-    leaderboard.insert(0, "rank", leaderboard.index + 1)
-    leaderboard["average_score"] = leaderboard["average_score"].round(1)
-    leaderboard["median_score"] = leaderboard["median_score"].round(1)
-    return leaderboard
-
-
-def _build_period_leaderboard(df: pd.DataFrame) -> pd.DataFrame:
-    leaderboard = (
-        df.groupby("author", as_index=False)
-        .agg(
-            best_score=("score", "max"),
-            games=("score", "count"),
-            average_score=("score", "mean"),
-            total_points=("score", "sum"),
-            latest_played_at=("timestamp", "max"),
-        )
-        .sort_values(
-            by=["best_score", "average_score", "games"],
-            ascending=[False, False, False],
-        )
-        .reset_index(drop=True)
-    )
-
-    leaderboard.insert(0, "rank", leaderboard.index + 1)
-    leaderboard["average_score"] = leaderboard["average_score"].round(1)
-    return leaderboard
-
-
-def _filter_by_period(df: pd.DataFrame, period_label: str) -> pd.DataFrame:
-    days = PERIODS[period_label]
-    if days is None:
-        return df
-
-    end_date = df["timestamp"].max()
-    start_date = end_date - pd.Timedelta(days=days)
-    return df[df["timestamp"] >= start_date]
-
-
-def _top_per_day(df: pd.DataFrame) -> pd.DataFrame:
-    last_date = df["date"].max()
-    recent_df = df[df["date"] == last_date]
+    parse_result = SERVICE.parse_metrodoku(content)
     return (
-        recent_df.groupby("author", as_index=False)
-        .first()[["date", "author", "score"]]
-        .sort_values("score", ascending=False)
-        .rename(columns={"author": "winner", "score": "winning_score"})
+        parse_result.dataframe,
+        parse_result.all_messages_count,
+        parse_result.metrodoku_messages_count,
     )
-
-
-def _read_uploaded_or_example(uploaded_file, use_example: bool) -> str | None:
-    if uploaded_file is not None:
-        return _decode_whatsapp_export(uploaded_file.getvalue())
-
-    latest_extract_path = _get_latest_extract_path()
-    if use_example and latest_extract_path is not None:
-        return latest_extract_path.read_text(encoding="utf-8")
-
-    return None
 
 
 def _render_leaderboard_page(df: pd.DataFrame) -> None:
-    _section_badge("� Top score du jour")
-    _render_pretty_table(
-        _top_per_day(df),
-        columns=[
-            ("date", "Date"),
-            ("winner", "Winner"),
-            ("winning_score", "Score"),
-        ],
+    _section_badge("Top score du jour")
+    render_pretty_table(
+        SERVICE.top_per_day(df),
+        columns=[("date", "Date"), ("winner", "Winner"), ("winning_score", "Score")],
     )
 
     st.divider()
-    _section_badge("�🏁 Classement global")
+    _section_badge("Classement global")
     st.caption(
         "Base sur la somme de points de toutes les parties: plus de volume = plus haut classement."
     )
-    global_lb = _build_global_leaderboard(df)
-    _render_pretty_table(
+    global_lb = SERVICE.build_global_leaderboard(df)
+    render_pretty_table(
         global_lb,
         columns=[
             ("rank", "Rank"),
@@ -586,22 +328,22 @@ def _render_leaderboard_page(df: pd.DataFrame) -> None:
     )
 
     st.divider()
-    _section_badge("🗓️ Classement par periode")
+    _section_badge("Classement par periode")
     st.caption("Classement base sur le meilleur score sur la periode choisie.")
 
     period_label = st.radio(
         "Fenetre temporelle",
-        options=list(PERIODS.keys()),
+        options=list(DEFAULT_PERIODS.keys()),
         horizontal=True,
     )
 
-    period_df = _filter_by_period(df, period_label)
+    period_df = SERVICE.filter_by_period(df, period_label)
     if period_df.empty:
         st.info("Aucune partie sur cette periode.")
         return
 
-    period_lb = _build_period_leaderboard(period_df)
-    _render_pretty_table(
+    period_lb = SERVICE.build_period_leaderboard(period_df)
+    render_pretty_table(
         period_lb,
         columns=[
             ("rank", "Rank"),
@@ -615,7 +357,7 @@ def _render_leaderboard_page(df: pd.DataFrame) -> None:
 
 
 def _render_dashboard_page(df: pd.DataFrame) -> None:
-    _section_badge("🔎 Dashboard exploratoire")
+    _section_badge("Dashboard exploratoire")
     st.caption("Fouille des donnees avec filtres, tendances et vues detaillees.")
 
     min_day = df["timestamp"].min().date()
@@ -641,68 +383,40 @@ def _render_dashboard_page(df: pd.DataFrame) -> None:
         return
 
     start_day, end_day = selected_range
-    filtered = df[
-        (df["author"].isin(selected_authors))
-        & (df["date"] >= start_day)
-        & (df["date"] <= end_day)
-    ].copy()
+    filtered = SERVICE.filter_dashboard(df, selected_authors, start_day, end_day)
 
     if filtered.empty:
         st.info("Aucune donnee pour ces filtres.")
         return
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("🎮 Parties", len(filtered))
-    m2.metric("👥 Joueurs actifs", filtered["author"].nunique())
-    m3.metric("📈 Score moyen", round(float(filtered["score"].mean()), 1))
-    m4.metric("🥇 Meilleur score", int(filtered["score"].max()))
+    m1.metric("Parties", len(filtered))
+    m2.metric("Joueurs actifs", filtered["author"].nunique())
+    m3.metric("Score moyen", round(float(filtered["score"].mean()), 1))
+    m4.metric("Meilleur score", int(filtered["score"].max()))
 
     trend_col_1, trend_col_2 = st.columns(2)
 
     with trend_col_1:
-        st.caption("📉 Evolution des scores (journalier)")
-        daily = (
-            filtered.groupby(["date", "author"], as_index=False)["score"]
-            .mean()
-            .pivot(index="date", columns="author", values="score")
-            .sort_index()
-        )
-        st.line_chart(daily)
+        st.caption("Evolution des scores (journalier)")
+        st.line_chart(SERVICE.build_daily_trend(filtered))
 
     with trend_col_2:
-        st.caption("🎯 Distribution des scores")
-        bins = pd.cut(filtered["score"], bins=9)
-        distribution = bins.value_counts().sort_index()
-        distribution_df = pd.DataFrame(
-            {"count": distribution.values}, index=distribution.index.astype(str)
-        )
-        st.bar_chart(distribution_df)
+        st.caption("Distribution des scores")
+        st.bar_chart(SERVICE.build_score_distribution(filtered))
 
-    st.caption("🔥 Meilleur score par joueur")
-    best_score_df = (
-        filtered.groupby("author", as_index=False)["score"]
-        .max()
-        .rename(columns={"score": "best_score"})
-        .sort_values("best_score", ascending=False)
-        .set_index("author")
+    st.caption("Meilleur score par joueur")
+    st.bar_chart(SERVICE.build_best_score_by_author(filtered))
+
+    st.caption("Volume de parties par joueur")
+    st.bar_chart(SERVICE.build_games_by_author(filtered))
+
+    st.caption("Top score du jour (filtres dashboard)")
+    st.dataframe(
+        SERVICE.top_per_day(filtered), hide_index=True, use_container_width=True
     )
-    st.bar_chart(best_score_df)
 
-    st.caption("🎲 Volume de parties par joueur")
-    games_df = (
-        filtered.groupby("author", as_index=False)["score"]
-        .count()
-        .rename(columns={"score": "games"})
-        .sort_values("games", ascending=False)
-        .set_index("author")
-    )
-    st.bar_chart(games_df)
-
-    st.caption("🏆 Top score du jour (filtres dashboard)")
-    top_day = _top_per_day(filtered)
-    st.dataframe(top_day, hide_index=True, use_container_width=True)
-
-    st.caption("🧾 Donnees detaillees")
+    st.caption("Donnees detaillees")
     detail = filtered[["timestamp", "author", "score"]].sort_values(
         "timestamp", ascending=False
     )
@@ -723,7 +437,9 @@ def _render_dashboard_page(df: pd.DataFrame) -> None:
 
 def main() -> None:
     st.set_page_config(
-        page_title="Metrodoku Leaderboard", page_icon="🚇", layout="wide"
+        page_title="Metrodoku Leaderboard",
+        page_icon="🚇",
+        layout="wide",
     )
     _apply_custom_ui()
     st.title("Metrodoku Leaderboard")
@@ -731,15 +447,11 @@ def main() -> None:
 
     with st.sidebar:
         st.header("Navigation")
-        page = st.radio(
-            "Choix de page",
-            options=["Leaderboard", "Dashboard"],
-            index=0,
-        )
+        page = st.radio("Choix de page", options=["Leaderboard", "Dashboard"], index=0)
 
         st.divider()
         st.header("Source de donnees")
-        latest_extract_path = _get_latest_extract_path()
+        latest_extract_path = REPOSITORY.get_latest_extract_path()
         uploaded_file = st.file_uploader(
             "WhatsApp export (.txt)",
             type=["txt"],
@@ -754,13 +466,11 @@ def main() -> None:
         else:
             st.caption("Aucun fichier extract_*.txt detecte dans data/.")
 
-    content = _read_uploaded_or_example(uploaded_file, use_example)
+    content = REPOSITORY.read_content(uploaded_file, use_example)
     _render_hero(page)
 
     if content is None:
-        st.info(
-            "📂 Ajoute un fichier .txt WhatsApp ou active les donnees exemple pour commencer."
-        )
+        st.info("Ajoute un fichier .txt WhatsApp ou active les donnees exemple.")
         return
 
     try:
