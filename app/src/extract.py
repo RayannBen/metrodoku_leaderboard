@@ -35,24 +35,21 @@ class Extract:
                     message_txt = self._normalize_message_header(
                         "\n".join(current_message_lines)
                     )
-                    messages.append(
-                        MessageFactory.create_message(message_txt)
-                    )
+                    messages.append(MessageFactory.create_message(message_txt))
                     current_message_lines = []
             current_message_lines.append(line)
 
         if current_message_lines:
-            message_txt = self._normalize_message_header("\n".join(current_message_lines))
-            messages.append(
-                MessageFactory.create_message(message_txt)
+            message_txt = self._normalize_message_header(
+                "\n".join(current_message_lines)
             )
+            messages.append(MessageFactory.create_message(message_txt))
 
         return messages
 
     def is_message_first_line(self, line: str) -> bool:
         return bool(
-            self._OLD_HEADER_PATTERN.match(line)
-            or self._NEW_HEADER_PATTERN.match(line)
+            self._OLD_HEADER_PATTERN.match(line) or self._NEW_HEADER_PATTERN.match(line)
         )
 
     def _normalize_message_header(self, message_txt: str) -> str:

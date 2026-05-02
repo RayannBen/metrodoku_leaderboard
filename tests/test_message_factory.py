@@ -1,4 +1,4 @@
-from src.message import Message, MetrodokuMessage, MessageFactory
+from app.src.message import Message, MetrodokuMessage, MessageFactory
 from tests.fixtures import (
     fixture_text,
     fixture_metrodoku_text,

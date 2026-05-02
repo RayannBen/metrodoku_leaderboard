@@ -1,6 +1,6 @@
-from src.message import Message, MetrodokuMessage
+from app.src.message import Message, MetrodokuMessage
 
-from src.extract import Extract
+from app.src.extract import Extract
 from tests.fixtures import fixture_simple_text_extract, fixture_extract_metrodoku
 
 

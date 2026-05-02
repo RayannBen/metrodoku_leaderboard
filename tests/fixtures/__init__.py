@@ -1,5 +1,5 @@
 from datetime import datetime
-from src.message import Message
+from app.src.message import Message
 
 fixture_message = Message("Test content", "Test author", datetime.now())
 fixture_text = "17/04/2026, 01:40 - Harvid: jokes on you je suis en télétravail"

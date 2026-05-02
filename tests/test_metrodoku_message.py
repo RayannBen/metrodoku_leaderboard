@@ -1,4 +1,4 @@
-from src.message import MetrodokuMessage
+from app.src.message import MetrodokuMessage
 from tests.fixtures import (
     fixture_metrodoku_text,
     fixture_metrodoku_text_with_previous_message,

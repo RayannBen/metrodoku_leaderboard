@@ -1,4 +1,4 @@
-from src.message import Message
+from app.src.message import Message
 from datetime import datetime
 from tests.fixtures import fixture_message, fixture_text
 
