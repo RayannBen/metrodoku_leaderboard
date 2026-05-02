@@ -22,6 +22,7 @@ PERIODS = {
 }
 CHEATER_SCORE_THRESHOLD = 900
 CHEATER_SCORE_LAST_DIGITS_MOD = 100
+CHEATER_LABEL = "LE TRICHEUR"
 
 
 def _extract_sort_key_from_title(path: Path) -> tuple[int, int, int] | None:
@@ -442,7 +443,7 @@ def _apply_cheater_rules(df: pd.DataFrame) -> pd.DataFrame:
     )
     working_df.loc[cheater_mask, "score"] = penalized_scores.astype(int)
     working_df["author"] = working_df["author"].map(
-        lambda name: f"💩 {name} LE TRICHEUR 💩" if name in cheaters else name
+        lambda name: f"💩 {name} {CHEATER_LABEL} 💩" if name in cheaters else name
     )
     return working_df
 
@@ -486,6 +487,9 @@ def _build_global_leaderboard(df: pd.DataFrame) -> pd.DataFrame:
         )
         .reset_index(drop=True)
     )
+
+    cheater_mask = leaderboard["author"].str.contains(CHEATER_LABEL, na=False)
+    leaderboard.loc[cheater_mask, "total_points"] = 0
 
     leaderboard.insert(0, "rank", leaderboard.index + 1)
     leaderboard["average_score"] = leaderboard["average_score"].round(1)
