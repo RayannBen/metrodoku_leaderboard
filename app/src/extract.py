@@ -1,7 +1,11 @@
 import re
 import pandas as pd
-from src.message import MessageFactory, Message, MetrodokuMessage
 from pathlib import Path
+
+try:
+    from src.message import MessageFactory, Message, MetrodokuMessage
+except ModuleNotFoundError:
+    from app.src.message import MessageFactory, Message, MetrodokuMessage
 
 
 class Extract:

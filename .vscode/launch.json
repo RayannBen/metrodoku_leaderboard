@@ -22,7 +22,9 @@
             "type": "debugpy",
             "request": "launch",
             "module": "pytest",
-            "args": ["-v"],
+            "args": [
+                "-v"
+            ],
             "justMyCode": true,
             "cwd": "${workspaceFolder}",
             "env": {

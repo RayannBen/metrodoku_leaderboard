@@ -10,8 +10,9 @@ import streamlit as st
 from src.extract import Extract
 
 
-EXAMPLE_PATH = Path("data/extract_02_05.txt")
-DATA_DIR = Path("data")
+APP_DIR = Path(__file__).resolve().parent
+DATA_DIR = APP_DIR / "data"
+EXAMPLE_PATH = DATA_DIR / "extract_02_05.txt"
 PERIODS = {
     "Semaine (7 jours)": 7,
     "Mois (30 jours)": 30,
@@ -21,22 +22,23 @@ PERIODS = {
 }
 
 
-def _extract_sort_key_from_title(path: Path) -> tuple[int, int] | None:
-    match = re.match(r"^extract_(\d{2})_(\d{2})(?:_\d{4})?\.txt$", path.name)
+def _extract_sort_key_from_title(path: Path) -> tuple[int, int, int] | None:
+    match = re.match(r"^extract_(\d{2})_(\d{2})(?:_(\d{4}))?\.txt$", path.name)
     if not match:
         return None
 
     day, month = int(match.group(1)), int(match.group(2))
+    year = int(match.group(3)) if match.group(3) else 0
     if day < 1 or day > 31 or month < 1 or month > 12:
         return None
-    return (month, day)
+    return (year, month, day)
 
 
 def _get_latest_extract_path() -> Path | None:
     if not DATA_DIR.exists():
         return None
 
-    candidates: list[tuple[tuple[int, int], Path]] = []
+    candidates: list[tuple[tuple[int, int, int], Path]] = []
     for path in DATA_DIR.glob("extract_*.txt"):
         key = _extract_sort_key_from_title(path)
         if key is not None:
@@ -87,8 +89,24 @@ def _apply_custom_ui() -> None:
                 border-right: 1px solid rgba(255, 255, 255, 0.1);
             }
 
-            section[data-testid="stSidebar"] * {
+            section[data-testid="stSidebar"] h1,
+            section[data-testid="stSidebar"] h2,
+            section[data-testid="stSidebar"] h3,
+            section[data-testid="stSidebar"] label,
+            section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
+            section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+            section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] span {
                 color: #f8fbff;
+            }
+
+            section[data-testid="stSidebar"] [data-testid="stFileUploader"] small {
+                color: rgba(248, 251, 255, 0.85);
+            }
+
+            section[data-testid="stSidebar"] input,
+            section[data-testid="stSidebar"] textarea,
+            section[data-testid="stSidebar"] [data-baseweb="select"] * {
+                color: #1b2130 !important;
             }
 
             section[data-testid="stSidebar"] hr {
@@ -240,7 +258,7 @@ def _apply_custom_ui() -> None:
                 color: #121b33;
             }
 
-            #MainMenu, footer, header {
+            #MainMenu, footer {
                 visibility: hidden;
             }
 
