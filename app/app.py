@@ -20,6 +20,8 @@ PERIODS = {
     "6 mois (180 jours)": 180,
     "Tout": None,
 }
+CHEATER_SCORE_THRESHOLD = 900
+CHEATER_SCORE_DIVISOR = 10
 
 
 def _extract_sort_key_from_title(path: Path) -> tuple[int, int, int] | None:
@@ -191,8 +193,18 @@ def _apply_custom_ui() -> None:
 
             div[data-testid="stMain"] div[data-testid="stRadio"] label,
             div[data-testid="stMain"] div[data-testid="stRadio"] label p,
-            div[data-testid="stMain"] div[data-testid="stRadio"] label span {
+            div[data-testid="stMain"] div[data-testid="stRadio"] label span,
+            div[data-testid="stMain"] div[data-testid="stRadio"] div[data-testid="stMarkdownContainer"],
+            div[data-testid="stMain"] div[data-testid="stRadio"] div[data-testid="stMarkdownContainer"] p,
+            div[data-testid="stMain"] [role="radiogroup"] label,
+            div[data-testid="stMain"] [role="radiogroup"] label * {
                 color: #1b2130 !important;
+            }
+
+            div[data-testid="stMain"] div[data-testid="stRadio"] {
+                background: #ffffff;
+                border-radius: 12px;
+                padding: 0.5rem 0.75rem;
             }
 
             .table-card {
@@ -413,6 +425,28 @@ def _decode_whatsapp_export(raw_bytes: bytes) -> str:
     return raw_bytes.decode("utf-8", errors="ignore")
 
 
+def _apply_cheater_rules(df: pd.DataFrame) -> pd.DataFrame:
+    working_df = df.copy()
+    cheaters = set(
+        working_df.loc[
+            working_df["score"] >= CHEATER_SCORE_THRESHOLD,
+            "author",
+        ].tolist()
+    )
+    if not cheaters:
+        return working_df
+
+    cheater_mask = working_df["author"].isin(cheaters)
+    penalized_scores = (
+        working_df.loc[cheater_mask, "score"] / CHEATER_SCORE_DIVISOR
+    ).round()
+    working_df.loc[cheater_mask, "score"] = penalized_scores.astype(int)
+    working_df["author"] = working_df["author"].map(
+        lambda name: f"💩 {name} LE TRICHEUR 💩" if name in cheaters else name
+    )
+    return working_df
+
+
 @st.cache_data(show_spinner=False)
 def _parse_metrodoku(content: str) -> tuple[pd.DataFrame, int, int]:
     extract = Extract(content)
@@ -427,6 +461,8 @@ def _parse_metrodoku(content: str) -> tuple[pd.DataFrame, int, int]:
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
     df["score"] = pd.to_numeric(df["score"], errors="coerce")
     df = df.dropna(subset=["timestamp", "score", "author"])
+    df["score"] = df["score"].astype(int)
+    df = _apply_cheater_rules(df)
     df["score"] = df["score"].astype(int)
     df["date"] = df["timestamp"].dt.date
     return df, all_messages_count, metrodoku_messages_count
